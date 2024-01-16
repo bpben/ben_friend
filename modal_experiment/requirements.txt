@@ -1,0 +1,4 @@
+python-dotenv==1.0.0
+pandas==2.1.1
+transformers==4.36.2
+datasets==2.16.1
