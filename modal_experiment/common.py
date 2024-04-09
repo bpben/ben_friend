@@ -2,9 +2,9 @@ from modal import Image, Stub, NetworkFileSystem, Secret
 import os
 
 VOL_MOUNT_PATH = "/root/friends_data"
-MODEL_PATH = 'meta-llama/Llama-2-7b-chat-hf'
+MODEL_PATH = 'mistralai/Mistral-7B-Instruct-v0.1'
 WANDB_PROJECT = None
-vol = NetworkFileSystem.persisted('friends_data')
+vol = NetworkFileSystem.from_name('friends_data', create_if_missing=True)
 LOCAL_MODEL_PATH = f'/pretrained/{MODEL_PATH}'
 DATA_DIR = '../data/'
 
@@ -15,6 +15,9 @@ def download_models():
     model.save_pretrained(LOCAL_MODEL_PATH)
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=os.environ['HF_TOKEN'])
+    # set pad_token_id equal to the eos_token_id if not set
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.save_pretrained(LOCAL_MODEL_PATH)
 
 openllama_image = (
@@ -34,10 +37,12 @@ openllama_image = (
         "peft",
         "transformers",
         "torch",
-        "sentencepiece"
+        "sentencepiece",
+        "trl",
+        "bitsandbytes"
     )
     .run_function(download_models,
-                  secret=Secret.from_name("hf_secret"))
+                  secrets=[Secret.from_name("hf_secret")])
 )
 
 stub = Stub(name="friends_bot", 
