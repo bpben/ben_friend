@@ -42,10 +42,9 @@ def generate_dataset():
             valid_lines.append(l.split(':')[1].strip())
     
     # make dataset
-    subset = 500
     paired = list(zip(valid_lines, valid_lines[1:]))
     friends_dataset = Dataset.from_list(
-        [{'text': (a, b)} for a, b in paired[:subset]])
+        [{'text': (a, b)} for a, b in paired])
     
     def apply_chat_template(example, tokenizer):
         a, b = example['text']
@@ -56,10 +55,6 @@ def generate_dataset():
         f_prompt = tokenizer.apply_chat_template(f_prompt, tokenize=False)
         example['text'] = f_prompt
         return example
-
-    def tokenize_function(examples):
-      # utility function to map to dataset
-      return tokenizer(examples["0"])
     
     # need to have this set up!
     load_dotenv()
@@ -70,30 +65,6 @@ def generate_dataset():
        fn_kwargs={"tokenizer": tokenizer},
     )
 
-    # block_size = 128
-
-    # def group_texts(examples):
-    #     # Concatenate all texts, chop up into block size (defined above)
-    #     # adapted from https://huggingface.co/docs/transformers/tasks/language_modeling
-    #     concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-    #     total_length = len(concatenated_examples[list(examples.keys())[0]])
-    #     # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-    #         # customize this part to your needs.
-    #     total_length = (total_length // block_size) * block_size
-    #     # Split by chunks of max_len.
-    #     result = {
-    #         k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-    #         for k, t in concatenated_examples.items()
-    #     }
-    #     result["labels"] = result["input_ids"].copy()
-    #     return result
-    
-    # lm_datasets = tokenized_datasets.map(
-    #     group_texts,
-    #     batched=True,
-    #     batch_size=1000,
-    #     num_proc=4,
-    # )
     return lm_datasets
 
 
@@ -105,11 +76,11 @@ def _train(
     dataset,
     output_dir: str = "./lora-alpaca",
     save_steps: int = 20,
-    num_train_epochs=1,
+    num_train_epochs=3,
     # training hyperparams
     batch_size: int = 128,
     micro_batch_size: int = 32,
-    learning_rate: float = 3e-4,
+    learning_rate: float = 1e-3,
     # lora hyperparams
     lora_r: int = 16,
     lora_alpha: int = 16,
@@ -120,8 +91,6 @@ def _train(
         "v_proj",
         "o_proj",
     ],
-    # llm hyperparams
-    group_by_length: bool = True,  # faster, but produces an odd training loss curve
     # wandb params
     wandb_project: str = "",
     wandb_run_name: str = "",
@@ -130,13 +99,10 @@ def _train(
     resume_from_checkpoint: bool = False,  
 ):
     import os
-    import sys
-
-    import torch
     import transformers
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from trl import setup_chat_format, SFTTrainer, DataCollatorForCompletionOnlyLM
+    from transformers import AutoTokenizer
+    from trl import SFTTrainer
     from transformers import BitsAndBytesConfig
 
     gradient_accumulation_steps = batch_size // micro_batch_size
@@ -167,20 +133,14 @@ def _train(
         device_map=device_map,
         quantization_config=quantization_config,
         )
-     
-    # model = AutoModelForCausalLM.from_pretrained(
-    #     base_model,
-    #     load_in_8bit=True,
-    #     torch_dtype=torch.float16,
-    #     device_map=device_map,
-    # )
 
     tokenizer = AutoTokenizer.from_pretrained(base_model, add_eos_token=True)
-
-    # tokenizer.pad_token_id = 0  # unk. we want this to be different from the eos token
-    # tokenizer.padding_side = "left"  # Allow batched inference
-
-    # model = prepare_model_for_int8_training(model)
+    # set pad_token_id equal to the eos_token_id if not set
+    if tokenizer.pad_token_id is None:
+        # TODO: may make sense to have this be set to 0
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+        # TODO: not sure if this is necessary, works without
+        # tokenizer.padding_side = "left"  # Allow batched inference
 
     peft_config = LoraConfig(
         r=lora_r,
@@ -190,45 +150,12 @@ def _train(
         bias="none",
         task_type="CAUSAL_LM",
     )
-    # model = get_peft_model(model, peft_config)
-
-    # model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
-
-    # if not ddp and torch.cuda.device_count() > 1:
-    #     # keeps Trainer from trying its own DataParallelism when more than 1 gpu is available
-    #     model.is_parallelizable = True
-    #     model.model_parallel = True
-
-    # trainer = transformers.Trainer(
-    #     model=model,
-    #     train_dataset=dataset,
-    #     args=transformers.TrainingArguments(
-    #         per_device_train_batch_size=micro_batch_size,
-    #         gradient_accumulation_steps=gradient_accumulation_steps,
-    #         num_train_epochs=num_train_epochs,
-    #         learning_rate=learning_rate,
-    #         fp16=True,
-    #         logging_steps=10,
-    #         optim="adamw_torch",
-    #         save_strategy="steps",
-    #         save_steps=save_steps,
-    #         output_dir=output_dir,
-    #         load_best_model_at_end=False,
-    #         ddp_find_unused_parameters=False if ddp else None,
-    #         group_by_length=group_by_length,
-    #         report_to="wandb" if use_wandb else "none",
-    #         run_name=wandb_run_name if use_wandb else None,
-    #     ),
-    #     data_collator=transformers.DataCollatorForSeq2Seq(
-    #         tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
-    #     )
-    # )
 
     data_version = 'sft_friends'
     training_args = transformers.TrainingArguments(
         data_version, # name the directory after our data version
-        num_train_epochs=3, # tends to work well
-        learning_rate=1e-3,  # these parameters led to a bit better style transfer
+        num_train_epochs=num_train_epochs, # tends to work well
+        learning_rate=learning_rate,  # these parameters led to a bit better style transfer
         weight_decay=0.01,
         report_to = [], # otherwise will try to report to wnb, which is weird default behavior
         per_device_train_batch_size=4
