@@ -42,9 +42,11 @@ def generate_dataset():
             valid_lines.append(l.split(':')[1].strip())
     
     # make dataset
+    # TODO: subset to control number of obs
+    subset = 5000
     paired = list(zip(valid_lines, valid_lines[1:]))
     friends_dataset = Dataset.from_list(
-        [{'text': (a, b)} for a, b in paired])
+        [{'text': (a, b)} for a, b in paired[:subset]])
     
     def apply_chat_template(example, tokenizer):
         a, b = example['text']
@@ -152,13 +154,15 @@ def _train(
     )
 
     data_version = 'sft_friends'
-    training_args = transformers.TrainingArguments(
-        data_version, # name the directory after our data version
+    training_args = transformers.TrainingArguments( 
         num_train_epochs=num_train_epochs, # tends to work well
         learning_rate=learning_rate,  # these parameters led to a bit better style transfer
         weight_decay=0.01,
         report_to = [], # otherwise will try to report to wnb, which is weird default behavior
-        per_device_train_batch_size=4
+        per_device_train_batch_size=4,
+        save_strategy="steps",
+        save_steps=save_steps,
+        output_dir=output_dir,
     )
 
     trainer = SFTTrainer(
@@ -173,7 +177,7 @@ def _train(
         max_seq_length=150,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     trainer.model.save_pretrained(output_dir)
 
@@ -193,6 +197,7 @@ def finetune(dataset):
         dataset,
         output_dir = f"{VOL_MOUNT_PATH}/{MODEL_PATH.replace('/', '_')}",
         num_train_epochs=3,
+        resume_from_checkpoint=False,
     )
 
 @stub.local_entrypoint()

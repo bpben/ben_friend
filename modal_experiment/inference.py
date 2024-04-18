@@ -1,22 +1,22 @@
 
-from modal import method, stub
+from modal import method, stub, Secret
 from common import *
 
 
 @stub.cls(
     gpu="T4",
     network_file_systems={VOL_MOUNT_PATH: vol},
+    secrets=[Secret.from_name("hf_secret")],
 )
 class OpenLlamaModel():
     def __init__(self):
-        from peft import LoraConfig, PeftModel, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         peft_model_path = f"{VOL_MOUNT_PATH}/{MODEL_PATH.replace('/', '_')}"
 
         tokenizer = AutoTokenizer.from_pretrained(LOCAL_MODEL_PATH)
         model = AutoModelForCausalLM.from_pretrained(LOCAL_MODEL_PATH,
-                                                     load_in_8bit=True,
+                                                     load_in_4bit=True,
                                                      device_map="auto")
 
         model.load_adapter(peft_model_path)
@@ -36,10 +36,23 @@ class OpenLlamaModel():
         result = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
         return result
+    
+    @method()
+    def push_to_hub(
+        self,
+        model_name: str,
+        **kwargs,
+    ):
+        self.model.push_to_hub(model_name, token=os.environ['HF_TOKEN'])
+
+        return model_name
 
 
 @stub.local_entrypoint()
-def main():
+def main(
+    model_name: str,
+    push_to_hub: bool = False
+):
     inputs = [
         "Tell me about alpacas.",
         "What did you think about the last season of Silicon Valley?",
@@ -61,3 +74,5 @@ def main():
                 input
             )
         )
+    if push_to_hub:
+        model.push_to_hub.remote(model_name)
