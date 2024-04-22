@@ -34,19 +34,33 @@ def generate_dataset():
                     return True
         return False
     
-    # implementing as individual lines
-    valid_lines = []
-    for l in lines:
-        if is_valid_line(l):
-            # lines with speaker information removed
-            valid_lines.append(l.split(':')[1].strip())
+    def process_line(line):
+        """
+        Process a line of dialogue to remove speaker information.
+
+        Parameters:
+        - line (str): The line to be processed.
+        """
+        if is_valid_line(line):
+            return line.split(':')[1].strip()
+    
+    # collect valid lines
+    # invalid line = dialogue break
+    paired_lines = []
+    idx = 0
+    # iterate through - get speaker a and b
+    while idx+1 < len(lines):
+        a = process_line(lines[idx])
+        b = process_line(lines[idx+1])
+        if a and b:
+            paired_lines.append((a, b))
+        idx += 1
     
     # make dataset
     # TODO: subset to control number of obs
     subset = 5000
-    paired = list(zip(valid_lines, valid_lines[1:]))
     friends_dataset = Dataset.from_list(
-        [{'text': (a, b)} for a, b in paired[:subset]])
+        [{'text': (a, b)} for a, b in paired_lines[:subset]])
     
     def apply_chat_template(example, tokenizer):
         a, b = example['text']
