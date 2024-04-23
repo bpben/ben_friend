@@ -1,7 +1,7 @@
 # Ben Needs a Friend - An intro to building friendly LLM applications
 This is the repository for the [tutorial at ODSC East 2024](https://odsc.com/speakers/ben-needs-a-friend-an-intro-to-building-large-language-model-applications/).
 
-The slides accompany a set of notebooks in the tutorial_notebooks directory.
+The slides are available [here](https://docs.google.com/presentation/d/19dCklG0tEhC5dSg7gos06Ow8Jr45NwNCTHThliVgqRg) and can also be downloaded from this repository.
 
 ## Setup
 The notebooks are intended to be run on Kaggle, which provides free compute and allows you to attach LLMs to the instance without downloading. 
