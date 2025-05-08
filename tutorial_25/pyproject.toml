@@ -1,0 +1,33 @@
+[project]
+authors = [{name = "bpben", email = "yksrotab@gmail.com"}]
+name = "tutorial_25"
+requires-python = ">= 3.10"
+version = "0.1.0"
+dependencies = ["llamabot[rag]>=0.11.2,<0.12", "llamabot[ui]"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-aarch64", "osx-64", "linux-64"]
+
+[tool.pixi.pypi-dependencies]
+tutorial_25 = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+jupyterlab = ">=4.3.5,<5"
+pixi-kernel = ">=0.6.1,<0.7"
+python = "==3.10"
+ipykernel = ">=6.29.5,<7"
+pip = ">=25.0.1,<26"
+ipywidgets = "==7.7.1"
+sentence-transformers = "==2.5.1"
+accelerate = ">=1.5.2,<2"
+lancedb = "==0.21.1"
+
+[tool.setuptools]
+py-modules = []
